@@ -1,0 +1,102 @@
+# LightGBM Baseline Model Configuration
+# 用于霜冻风险预测的 LightGBM 基线模型配置
+
+model_name: "lightgbm_baseline"
+model_type: "lightgbm"
+task_type: "regression"  # regression for temperature prediction, classification for frost event
+
+# Data configuration
+data:
+  # Input data path (will be created by data preparation scripts)
+  input_path: "data/interim/features/cimis_features.parquet"
+  target_column: "Air Temp (C)"
+  
+  # Feature columns to use
+  # If empty, will use all numeric columns except target and metadata
+  feature_columns: []  # Empty means auto-select all numeric features
+  
+  # Columns to exclude from features
+  exclude_columns:
+    - "Stn Id"
+    - "Stn Name"
+    - "CIMIS Region"
+    - "Date"
+    - "Hour (PST)"
+    - "Jul"
+    - "qc"
+    - "qc.1"
+    - "qc.2"
+    - "qc.3"
+    - "qc.4"
+    - "qc.5"
+    - "qc.6"
+    - "qc.7"
+    - "qc.8"
+    - "qc.9"
+
+# Model parameters
+model_params:
+  n_estimators: 100
+  learning_rate: 0.05
+  max_depth: 6
+  num_leaves: 31
+  min_child_samples: 20
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1
+  reg_lambda: 0.1
+  random_state: 42
+  verbose: -1
+  # Early stopping (uncomment if using validation set)
+  # callbacks: []  # Will be set programmatically if early_stopping_rounds is specified
+
+# Training configuration
+training:
+  validation_strategy: "time_split"  # time_split, loso, group_kfold, time_series_split
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  
+  # Early stopping (for LightGBM)
+  # Note: early_stopping_rounds should be set in model_params if using LightGBM's built-in callback
+  eval_metric: "mae"  # mae, rmse, r2
+  
+  # Additional training parameters
+  verbose: true
+
+# Evaluation configuration
+evaluation:
+  metrics:
+    regression:
+      - "mae"
+      - "rmse"
+      - "r2"
+      - "mape"
+    classification:  # If converting to probability
+      - "accuracy"
+      - "precision"
+      - "recall"
+      - "f1"
+      - "roc_auc"
+      - "brier_score"
+  
+  # Probability threshold for frost event classification
+  frost_threshold_temp: 0.0  # Temperature threshold in Celsius
+
+# Output configuration
+output:
+  base_dir: "experiments/runs"
+  # Run ID will be auto-generated: {model_name}_{timestamp}
+  model_path: "{run_dir}/model.pkl"
+  config_path: "{run_dir}/config.yaml"
+  metrics_path: "{run_dir}/metrics.json"
+  predictions_path: "{run_dir}/predictions.csv"
+  plots_dir: "{run_dir}/plots"
+  logs_dir: "{run_dir}/logs"
+
+# Feature importance
+feature_importance:
+  save: true
+  top_n: 20
+  plot: true
+

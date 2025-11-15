@@ -1,0 +1,148 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# PyCharm
+.idea/
+
+# Data files (large files)
+data/raw/
+data/processed/
+*.csv
+*.csv.gz
+*.parquet
+*.h5
+*.hdf5
+*.feather
+
+# Model files (large binary files)
+*.pkl
+*.pth
+*.pt
+*.cbm
+*.model
+*.ckpt
+*.h5
+*.pb
+*.onnx
+*.tflite
+
+# Experiment results - keep summaries and logs, exclude large files
+experiments/*/top175_features/**/*.pkl
+experiments/*/top175_features/**/*.pth
+experiments/*/top175_features/**/*.cbm
+experiments/*/top175_features/**/*.model
+experiments/*/top175_features/**/*.parquet
+experiments/*/top175_features/**/checkpoints/
+experiments/*/top175_features/**/best_model.pth
+experiments/*/top175_features/**/checkpoint_epoch_*.pth
+
+# Keep experiment summaries, logs, and metrics
+!experiments/*/top175_features/**/*.json
+!experiments/*/top175_features/**/*.log
+!experiments/*/top175_features/**/*.txt
+!experiments/*/top175_features/**/summary.json
+!experiments/*/top175_features/**/metrics.json
+!experiments/*/top175_features/**/training_history.json
+!experiments/*/top175_features/**/training_curves.png
+!experiments/*/top175_features/**/reliability_diagram.png
+!experiments/*/top175_features/**/calibration_curve.png
+
+# Exclude large predictions.json files (>10MB)
+experiments/*/top175_features/**/predictions.json
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.cache
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Large experiment outputs (keep structure but not large files)
+experiments/*/top175_features/full_training/**/*.pkl
+experiments/*/top175_features/full_training/**/*.pth
+experiments/*/top175_features/full_training/**/*.cbm
+experiments/*/top175_features/loso/**/*.pkl
+experiments/*/top175_features/loso/**/*.pth
+experiments/*/top175_features/loso/**/*.cbm
+
+# Keep experiment structure and important files
+!experiments/*/top175_features/full_training/**/*.json
+!experiments/*/top175_features/full_training/**/*.log
+!experiments/*/top175_features/loso/**/*.json
+!experiments/*/top175_features/loso/**/*.log
+
+# Feature importance files (can be large)
+experiments/*/top175_features/**/feature_importance*.csv
+experiments/*/top175_features/**/feature_importance*.parquet
+
+# Keep feature importance summaries
+!experiments/*/top175_features/**/feature_importance_summary.json
+
