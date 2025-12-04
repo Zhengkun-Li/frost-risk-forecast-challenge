@@ -1,0 +1,274 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{fontspec}
+\setmainfont{Noto Sans CJK SC}
+
+\title{AgriFrost-AI 霜冻风险预测进展报告（中文版）}
+\author{AgriFrost-AI 团队}
+\date{\today}
+
+\begin{document}
+\sloppy
+\XeTeXlinebreaklocale "zh"
+\XeTeXlinebreakskip = 0pt plus 0.1pt
+\setlength{\emergencystretch}{3em}
+\setlength{\parindent}{2em}
+\maketitle
+
+\begin{abstract}
+本文档汇总 AgriFrost-AI 在 F3 Innovate 霜冻风险预测挑战中的阶段性成果。我们基于 2010--2025 年 18 个 CIMIS 站点的逐小时观测，构建了端到端的数据清洗、特征构建、矩阵化建模与跨站验证流程，覆盖 3、6、12、24 小时四个预报窗口。报告重点阐述数据处理策略、ABCD 特征矩阵、模型组合、实验结果、校准表现、LOSO 泛化能力、关键近地特征以及与种植者决策的衔接，并展望 ERA5/HRRR 同步气象信息的融入方向。
+\end{abstract}
+
+\tableofcontents
+\clearpage
+\section{引言}
+霜冻依旧是加州高价值作物面临的主要气象风险，尤其在花期阶段，单次强辐射霜冻即可造成巨大经济损失。F3 Innovate 挑战旨在评估数据驱动方法能否在多地形、多气候条件下提供可靠的短期霜冻预测，并要求参赛队伍完成以下任务：
+\begin{itemize}[leftmargin=*]
+    \item 同时输出 3、6、12、24 小时的霜冻概率与温度预估；
+    \item 量化概率校准质量，包括 Brier、ECE、可靠性图；
+    \item 通过留一站（LOSO）检验空间泛化，避免站点泄漏；
+    \item 解释概率在实际防护决策中的使用方式。
+\end{itemize}
+AgriFrost-AI 项目遵循上述要求构建了可复现的端到端流程，并在本报告中详细介绍方法与实验结果。
+
+\section{数据描述}
+\subsection{观测来源与覆盖范围}
+\begin{itemize}[leftmargin=*]
+    \item \textbf{主数据集}：本研究使用的逐小时气象观测来自加州灌溉管理信息系统（California Irrigation Management Information System, CIMIS），覆盖加利福尼亚中央谷地及周边山麓地区的 18 个站点。站点沿中央谷地呈南北向分布（图 \ref{fig:stationmap_cn}），从 Sacramento 平原延伸至 Bakersfield 区域，跨越冷空气堆积易发区、地势抬升带和高蒸散农田带等多样微气候环境。数据时间跨度为 2010--2025 年，共计约 236 万条逐小时记录，其中霜冻事件（温度低于 \(0~^\circ\mathrm{C}\)）占比接近 0.9\%，为构建高分辨率霜冻预测模型提供了连续而丰富的长期序列。原始数据与配套脚本统一托管在 \href{https://github.com/CarlSaganPhD/frost-risk-forecast-challenge}{GitHub 仓库}，便于版本追踪与复现。
+    \item \textbf{站点元数据}：包含站号、名称、CIMIS 区域、县市、经纬度、海拔、GroundCover、启停日期及是否为 ETo 站等信息，用于空间聚合与 LOSO 分组；完整列表见 Supplementary Table~1。
+    \item \textbf{外部数据}：可选地接入 ERA5 或 HRRR 的冷空气平流、云量与辐射变量，以捕捉大尺度驱动因子，见第 \ref{sec:synoptic_cn} 节。
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\textwidth]{figures/station_distribution_map.png}
+    \caption{18 个 CIMIS 站点空间分布（静态图）；交互式版本见 Supplementary Materials}
+    \label{fig:stationmap_cn}
+\end{figure}
+
+\subsection{处理流程}
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{数据汇聚}：合并各站点 CSV/Parquet 文件，统一转为本地太阳时，并附加站点元信息。
+    \item \textbf{质量控制}：按照变量阈值剔除异常值、使用插值填补短缺测，并保留缺失掩码。
+    \item \textbf{时间上下文}：构建 1/3/6/12/24 小时的滞后和滑动统计特征，同时加入日内与年周期谐波。
+    \item \textbf{空间上下文}：依据不同半径（20--200 km）的邻站集合，计算均值、极值、方差、梯度及距离加权统计，共生成 288 个邻域特征。
+    \item \textbf{标签生成}：一次性生成 4 个时间跨度的霜冻二分类标签及温度回归目标，确保所有训练任务使用同一套标签。
+\end{enumerate}
+
+\subsection{数据质量与 QC 概览}
+统一的 `DataCleaner` 流程首先解析所有以 \texttt{qc} 开头的质量字段，并依据 CIMIS 标准仅保留 “空白/通过” 与 “Y” 两类标记；其余（M、R、S、Q、P 及其他维护标志）全部转为缺失，再结合哨兵值剔除与按站点前向填补，保证训练集无伪信号泄漏。2010--2025 年的 2,367 万条 QC 标记中，98.29\% 属于 “可用” 档，0.62\% 为缺测（M），0.45\% 被拒绝（R），0.20\% 属于严重离群（S），其余仅 1\% 内；图 \ref{fig:qc_pie_cn} 展示了整体分布，而图 \ref{fig:qc_station_cn} 以堆叠柱状将各站点的全部 QC 结构展开，便于识别是否存在持续异常的设备或环境。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\textwidth]{figures/qc_flag_distribution.png}
+    \caption{CIMIS QC 标记分布（2010--2025），基于 18 个站点全部逐小时观测}
+    \label{fig:qc_pie_cn}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{figures/qc_flag_distribution_per_station.png}
+    \caption{各站点 QC 构成，使用堆叠柱状展示 “可用/缺测/拒绝/严重”等占比}
+    \label{fig:qc_station_cn}
+\end{figure}
+
+\subsection{ABCD 特征矩阵}
+特征设计遵循 “单站/多站 × 原始/工程” 的 2×2+1 框架，表 \ref{tab:matrix_cn} 总结了四个主矩阵：
+
+\begin{table}[H]
+    \centering
+    \caption{ABCD 特征矩阵概览}
+    \label{tab:matrix_cn}
+    \begin{tabular}{p{1.2cm}p{1.8cm}p{7.8cm}p{2.8cm}}
+        \toprule
+        矩阵 & 空间范围 & 特征构成 & 典型模型 \\
+        \midrule
+        A & 单站 & 12 个原始 CIMIS 变量 + 周期编码 & LightGBM, CatBoost \\
+        B & 单站 & 175 个精选工程特征（滞后、滑动、异常度） & LightGBM, XGBoost, CatBoost \\
+        C & 半径聚合 & 原始 + 288 个邻站统计 + 缺失掩码 & LightGBM, ST-GCN, DCRNN \\
+        D & 半径聚合 + 工程 & B 矩阵特征 + 邻站特征（534+ 维） & CatBoost, XGBoost, 集成 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+其中矩阵 C 表现最优，保留 12 个本地观测与 288 个邻域统计，并通过特征重要性分析确认：邻域土壤温度梯度、露点差、蒸汽压亏缺是最具早期预警价值的组合；矩阵 B 受滞后统计主导，而矩阵 A 仅依赖原始变量，在夜间逆温条件下容易失效；矩阵 D 虽然叠加了工程特征，但校准收益有限，提示仍需引入更高质量的同步气象指标。
+
+\subsection{划分与防泄漏}
+所有模型采用 70\% 训练、15\% 验证、15\% 测试的时间顺序划分，并保持站内时间单调。LOSO 评估在每次迭代中剔除一个站点、使用剩余站点拟合全部预处理和模型，再在被剔除站点上测试，以检验空间泛化。任何缩放、PCA、邻域构建等步骤均仅基于训练子集，保证无未来信息泄漏。
+
+\section{方法}
+\subsection{流程概览}
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        process/.style={rectangle, rounded corners, draw=black, fill=gray!10, minimum width=3.4cm, minimum height=1.1cm},
+        datastore/.style={rectangle, rounded corners, draw=black, fill=gray!15, minimum width=3.4cm, minimum height=1.1cm},
+        line/.style={-Latex, thick}
+    ]
+    \node[datastore] (ndp) {数据与元数据};
+    \node[process, right=1.6cm of ndp] (prep) {清洗与质控};
+    \node[process, right=1.8cm of prep] (features) {时空特征构建};
+    \node[process, below=1.6cm of features] (models) {模型族训练};
+    \node[process, left=1.8cm of models] (calib) {校准与可靠性};
+    \node[process, left=1.8cm of calib] (eval) {LOSO 与多视角评估};
+    \node[process, below=1.6cm of calib] (decision) {决策支持输出};
+    \draw[line] (ndp) -- (prep);
+    \draw[line] (prep) -- (features);
+    \draw[line] (features) -- (models);
+    \draw[line] (models) -- (calib);
+    \draw[line] (calib) -- (eval);
+    \draw[line] (models) -- (decision);
+    \draw[line] (eval) |- (decision);
+    \end{tikzpicture}
+    \caption{AgriFrost-AI 方法流程}
+\end{figure}
+
+\subsection{模型组合与实验设置}
+\begin{itemize}[leftmargin=*]
+    \item \textbf{树模型}：LightGBM（主力）、XGBoost、CatBoost，学习率 0.05，树数 200--1000，深度 6--8，并依据霜冻稀缺性调整正负样本权重。
+    \item \textbf{图/序列模型}：ST-GCN、DCRNN、GRU/LSTM，用于检验显式时空建模对比工程特征的增益。
+    \item \textbf{实验调度}：统一 CLI 负责数据处理、训练、评估与产出归档。半径与时间窗口扫描采用固定随机种子，便于横向对比。
+    \item \textbf{度量记录}：每次运行都会输出标准化指标、校准图、预测分布与配置快照，随后汇总至全局结果表进行分析。
+\end{itemize}
+
+\subsection{评估指标}
+分类和回归双任务的评估指标包括 ROC-AUC、PR-AUC、Brier Score、期望校准误差（ECE）、温度 MAE/RMSE 与 \(R^2\)。其中 PR-AUC 用于衡量极度不平衡的霜冻事件判别力，Brier/ECE 评估概率是否可直接用于运营决策。
+
+\section{实验结果}\label{sec:experiments_cn}
+\subsection{整体概率性能}
+矩阵 C + LightGBM 的最佳配置在各个预测窗口的表现见表 \ref{tab:prob_cn}。
+
+\begin{table}[H]
+    \centering
+    \caption{霜冻概率与温度预测表现（时间留后 15\% 测试集）}
+    \label{tab:prob_cn}
+    \begin{tabular}{lcccccc}
+        \toprule
+        预测窗口 & ROC-AUC & PR-AUC & Brier & ECE & RMSE (\(^\circ\mathrm{C}\)) & MAE (\(^\circ\mathrm{C}\)) \\
+        \midrule
+        3 小时（100 km） & 0.9972 & 0.7282 & 0.0026 & 0.0012 & 1.54 & 1.16 \\
+        6 小时（100 km） & 0.9936 & 0.5838 & 0.0036 & 0.0021 & 2.10 & 1.60 \\
+        12 小时（200 km） & 0.9901 & 0.4914 & 0.0043 & 0.0032 & 2.42 & 1.85 \\
+        24 小时（160 km） & 0.9877 & 0.4596 & 0.0044 & 0.0034 & 2.41 & 1.85 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+短期模型的判别力接近完美（ROC-AUC \(>0.99\)），PR-AUC 在 24 小时仍保持 0.46，说明即便霜冻极少也能有效排序。半径扫描显示：短期更倾向 60--120 km 的紧邻区域，而 12--24 小时则需要更大的邻域获取大尺度信号。
+
+\subsection{校准与可靠性}
+所有预测窗口的 Brier Score 均低于 0.005，ECE 低于 0.004。图 \ref{fig:reliability_cn} 展示了 3 小时模型的可靠性图，概率刻度整体贴近对角线，仅在高概率区略显保守。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{figures/reliability_diagram_3h.png}
+    \caption{3 小时模型的可靠性图（矩阵 C，半径 100 km）}
+    \label{fig:reliability_cn}
+\end{figure}
+
+\subsection{LOSO 空间泛化}
+LOSO 结果汇总于表 \ref{tab:loso_cn}。可见 ROC-AUC 在所有时间窗口均超过 0.987，且与常规测试集相比没有明显下降，说明邻域特征有效捕捉了跨站气候信息。
+
+\begin{table}[H]
+    \centering
+    \caption{LOSO 与常规评估对比（18 个站点平均）}
+    \label{tab:loso_cn}
+    \begin{tabular}{lcccc}
+        \toprule
+        预测窗口 & ROC-AUC (标准) & ROC-AUC (LOSO) & 差值 (百分点) & MAE\(_{\text{LOSO}}\) (\(^\circ\mathrm{C}\)) \\
+        \midrule
+        3 小时 & 0.9965 & 0.9974 & +0.09 & 1.14 \\
+        6 小时 & 0.9926 & 0.9938 & +0.12 & 1.55 \\
+        12 小时 & 0.9892 & 0.9905 & +0.13 & 1.79 \\
+        24 小时 & 0.9843 & 0.9878 & +0.35 & 1.93 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{矩阵与模型对比}\label{sec:matrixcomparison_cn}
+我们将所有实验按矩阵和模型族汇总，如表 \ref{tab:matrixbest_cn} 与图 \ref{fig:matrixcomparison_cn} 所示。Matrix C 在所有时间窗口均取得最优 Brier 与 PR-AUC；对比同一模型在不同矩阵时，可看到 LightGBM 从 A 到 C 的 ROC-AUC 提升约 0.010，突显空间特征的重要性。
+
+\begin{table}[H]
+    \centering
+    \caption{每个矩阵/预测窗口的最佳配置}
+    \label{tab:matrixbest_cn}
+    \begin{tabular}{lcccccc}
+        \toprule
+        矩阵 & 预测窗口 & 模型 & 半径 (km) & ROC-AUC & PR-AUC & Brier \\
+        \midrule
+        A & 3h & LightGBM & 0 & 0.9967 & 0.7148 & 0.0027 \\
+        A & 6h & LightGBM & 0 & 0.9923 & 0.5397 & 0.0041 \\
+        A & 12h & LightGBM & 0 & 0.9856 & 0.3884 & 0.0049 \\
+        A & 24h & CatBoost & 0 & 0.9284 & 0.0900 & 0.0050 \\
+        B & 3h & LightGBM & 0 & 0.9969 & 0.7042 & 0.0029 \\
+        B & 6h & LightGBM & 0 & 0.9937 & 0.5531 & 0.0038 \\
+        B & 12h & LightGBM & 0 & 0.9896 & 0.4337 & 0.0044 \\
+        B & 24h & CatBoost & 0 & 0.9392 & 0.1072 & 0.0049 \\
+        C & 3h & LightGBM & 100 & 0.9972 & 0.7282 & 0.0026 \\
+        C & 6h & LightGBM & 100 & 0.9936 & 0.5838 & 0.0036 \\
+        C & 12h & LightGBM & 200 & 0.9901 & 0.4914 & 0.0043 \\
+        C & 24h & LightGBM & 160 & 0.9877 & 0.4596 & 0.0044 \\
+        D & 3h & CatBoost & 200 & 0.9874 & 0.3931 & 0.0038 \\
+        D & 6h & CatBoost & 160 & 0.9718 & 0.2676 & 0.0043 \\
+        D & 12h & CatBoost & 180 & 0.9604 & 0.1891 & 0.0046 \\
+        D & 24h & CatBoost & 180 & 0.9467 & 0.1503 & 0.0047 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/matrix_model_comparison.png}
+    \caption{不同模型族在四个特征矩阵中的最佳 ROC-AUC 对比}
+    \label{fig:matrixcomparison_cn}
+\end{figure}
+
+\section{特征洞察}
+从矩阵 C 的特征重要性与半径消融实验可以提炼出以下结论：
+\begin{itemize}[leftmargin=*]
+    \item \textbf{土壤温度梯度}：邻域土温的最小值与梯度能反映冷空气积聚，是 3/6 小时模型的核心信号。
+    \item \textbf{湿度与露点差}：露点/空气温差、蒸汽压亏缺在辐射霜冻形成前数小时会快速扩大，是 12/24 小时预警的重要指标。
+    \item \textbf{谐波特征}：日内与年周期对上面信号起到 gating 作用，可显著降低假警报。
+    \item \textbf{多变量组合}：同时监测土壤温度梯度、露点差、蒸汽压亏缺与相对湿度梯度，可使 PR-AUC 相比单站基线提升 36.7\%。
+\end{itemize}
+
+\section{决策支持}
+\label{sec:decision_cn}
+Calibrated 概率直接对应实际操作阈值：
+\begin{itemize}[leftmargin=*]
+    \item \textbf{20\% 概率}：加强传感器监控，提前检查风机/喷灌设备但尚无须启动。
+    \item \textbf{50\% 概率}：启动灌溉系统预热、调配移动热源，并通知班组准备夜间值守。
+    \item \textbf{80\% 概率}：在预报最低温前 1--2 小时启动风机或微喷，重点保护预测温度将低于 \(0~^\circ\mathrm{C}\) 的地块。
+\end{itemize}
+鉴于 Brier Score 均低于 0.005，这些概率阈值可以直接写入农场 SOP。
+
+\section{同步气象拓展}\label{sec:synoptic_cn}
+为进一步提升长时段性能，计划引入以下 ERA5/HRRR 特征：
+\begin{enumerate}[leftmargin=*]
+    \item 925--850 hPa 温度平流，用于衡量冷空气输送。
+    \item 云量与长波下行辐射，刻画辐射冷却条件。
+    \item 地表净辐射与土壤湿度，补充能量收支信息。
+\end{enumerate}
+改造方案为：在同一配置下分别训练 “仅地面” 与 “地面+同化” 模型，通过 LOSO 成对 t 检验验证增益。
+
+\section{可复现性}
+项目使用声明式配置与固定随机种子，所有实验目录均包含：原始参数、数据切分信息、训练日志、指标文件、可靠性图与模型权重。手稿由同一仓库直接编译而得，避免了报告与代码脱节。
+
+\section{结论与展望}
+\begin{itemize}[leftmargin=*]
+    \item 短期模型（3/6 小时）在判别力与校准方面已满足挑战要求，PR-AUC 与 Brier 均处于行业领先水平。
+    \item Matrix C 的邻域特征显著提高了空间泛化能力，LOSO 几乎无性能折损。
+    \item 下一阶段工作包括：同化 ERA5/HRRR 特征、完成所有矩阵的 LOSO 细粒度报告，以及对特征重要性进行站点级解释，帮助种植者理解不同区域的主导因子。
+\end{itemize}
+
+\end{document}
+

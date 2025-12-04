@@ -1,0 +1,30 @@
+\contentsline {section}{\numberline {1}引言}{3}{section.1}%
+\contentsline {section}{\numberline {2}相关工作}{3}{section.2}%
+\contentsline {section}{\numberline {3}数据与研究区域}{3}{section.3}%
+\contentsline {subsection}{\numberline {3.1}观测来源与空间覆盖范围}{4}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}霜冻事件分布与季节特征}{4}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}观测变量与物理意义概述}{5}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}数据质量与 QC 概览}{5}{subsection.3.4}%
+\contentsline {section}{\numberline {4}方法}{7}{section.4}%
+\contentsline {subsection}{\numberline {4.1}数据预处理与 QC 流程}{7}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}特征工程与 ABCD 特征矩阵}{7}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}特征选择与特征重要性分析}{8}{subsection.4.3}%
+\contentsline {paragraph}{阶段一：全特征基线训练}{8}{section*.2}%
+\contentsline {paragraph}{阶段二：基于累积重要性的特征截断}{8}{section*.3}%
+\contentsline {paragraph}{模型特定视角与可视化}{8}{section*.4}%
+\contentsline {subsection}{\numberline {4.4}模型族与训练配置}{9}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}训练/验证划分与防泄漏}{9}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}评估指标}{9}{subsection.4.6}%
+\contentsline {section}{\numberline {5}实验结果}{9}{section.5}%
+\contentsline {subsection}{\numberline {5.1}实验规模与结果概览（2025-12-04）}{9}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}模型性能可视化与综合分析}{11}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}整体概率与温度预测性能}{12}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}概率校准与可靠性}{13}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}LOSO 空间泛化}{13}{subsection.5.5}%
+\contentsline {subsection}{\numberline {5.6}特征矩阵与模型族对比}{14}{subsection.5.6}%
+\contentsline {subsection}{\numberline {5.7}特征洞察}{15}{subsection.5.7}%
+\contentsline {section}{\numberline {6}讨论}{15}{section.6}%
+\contentsline {section}{\numberline {7}决策支持应用}{15}{section.7}%
+\contentsline {section}{\numberline {8}同步气象拓展与未来工作}{15}{section.8}%
+\contentsline {section}{\numberline {9}可复现性与开源}{16}{section.9}%
+\contentsline {section}{\numberline {10}结论}{16}{section.10}%
